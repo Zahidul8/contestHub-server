@@ -31,6 +31,11 @@ async function run() {
 
     // creator related contest apis 
 
+    app.get('/contests/all', async(req, res) => {
+      const cursor = contestsCollection.find().sort({'count': -1});
+        const result = await cursor.toArray();
+        res.send(result);
+    })
     app.get('/contests', async(req, res) => {
         const cursor = contestsCollection.find().sort({'count': -1}).limit(6);
         const result = await cursor.toArray();
