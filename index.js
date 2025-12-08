@@ -64,6 +64,32 @@ async function run() {
       res.send(result);
     })
 
+    app.get('/users', async (req, res) => {
+      const result = await usersCollection.find().toArray();
+      res.send(result);
+    })
+
+    // update user role 
+    app.patch('/users/role/:email', async (req, res) => {
+      
+        const email = req.params.email;
+        const { role } = req.body;
+
+        const filter = { email: email };
+        const updateDoc = {
+          $set: { role: role }
+        };
+
+        const result = await usersCollection.updateOne(filter, updateDoc);
+
+        if (result.modifiedCount === 0) {
+          return res.status(404).send({ message: "User not found or role already same" });
+        }
+
+        res.send({ message: "Role updated successfully", result });
+
+    });
+
 
     // creator related contest apis 
 
