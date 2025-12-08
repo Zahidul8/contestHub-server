@@ -114,11 +114,27 @@ async function run() {
       res.send(result);
     })
 
+    app.get('/contests/creator', async(req, res) => {
+      const email = req.query.email;
+      const query = {email: email};
+      const result = await contestsCollection.find(query).toArray();
+      res.send(result);
+
+    })
+
     app.post('/contest', async (req, res) => {
       const contestData = req.body;
       contestData.status = 'pending';
+      contestData.created_at= new Date().toISOString();
       const result = await contestsCollection.insertOne(contestData);
       res.send(result);
+    })
+    app.delete('/contests/:id', async(req, res) => {
+      const id = req.params.id;
+      const query = {_id: new ObjectId(id)};
+      const result = await contestsCollection.deleteOne(query);
+      res.send(result)
+
     })
 
     app.get("/contests-all", async (req, res) => {
