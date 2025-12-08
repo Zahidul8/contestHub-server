@@ -102,7 +102,7 @@ async function run() {
       res.send(result);
     })
     app.get('/contests', async (req, res) => {
-      const cursor = contestsCollection.find().sort({ 'count': -1 }).limit(6);
+      const cursor = contestsCollection.find({status: 'approved'}).sort({ 'count': -1 }).limit(6);
       const result = await cursor.toArray();
       res.send(result);
     })
@@ -120,6 +120,40 @@ async function run() {
       const result = await contestsCollection.insertOne(contestData);
       res.send(result);
     })
+
+    app.get("/contests-all", async (req, res) => {
+  const contests = await contestsCollection.find().toArray();
+  res.send(contests);
+});
+
+// Single API for Confirm / Reject / Delete
+app.patch("/contests/action/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+    const { action } = req.body; // action = "confirm" | "reject" | "delete"
+
+    if (!["confirm", "reject", "delete"].includes(action)) {
+      return res.status(400).send({ error: "Invalid action" });
+    }
+
+    if (action === "delete") {
+      const result = await contestsCollection.deleteOne({ _id: new ObjectId(id) });
+      return res.send({ message: "Contest deleted", result });
+    }
+
+    const status = action === "confirm" ? "approved" : "rejected";
+    const result = await contestsCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: { status } }
+    );
+
+    res.send({ message: `Contest ${status}`, result });
+  } catch (error) {
+    console.error("Contest Action Error:", error);
+    res.status(500).send({ error: error.message });
+  }
+});
+
 
     // payment related apis 
 
