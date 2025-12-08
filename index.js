@@ -4,6 +4,8 @@ const app = express();
 require('dotenv').config();
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const port = process.env.PORT || 3000
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+
 
 // middleware 
 app.use(cors());
@@ -27,7 +29,10 @@ async function run() {
   try {
 
     const db = client.db('contest_hub_db');
+    const usersCollection = db.collection('users')
     const contestsCollection = db.collection('contests')
+    const paymentsCollection = db.collection('payments');
+    const submissionsCollection = db.collection('submissions');
 
     // creator related contest apis 
 
@@ -59,8 +64,64 @@ async function run() {
       res.send(result);
     })
 
+    // payment related apis 
 
+    
+app.post('/create-checkout-session', async (req, res) => {
+  try {
+    const paymentInfo = req.body;
 
+    // Validate data
+    if (!paymentInfo?.price || Number(paymentInfo.price) < 1) {
+      return res.status(400).send({ error: "Invalid price" });
+    }
+    if (!paymentInfo?.email) {
+      return res.status(400).send({ error: "Email is required" });
+    }
+    if (!paymentInfo?.contestId) {
+      return res.status(400).send({ error: "Contest ID is required" });
+    }
+
+    // Stripe Checkout Session
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+
+      line_items: [
+        {
+          price_data: {
+            currency: 'usd',
+            unit_amount: Number(paymentInfo.price) * 100, // convert to cents
+            product_data: {
+              name: paymentInfo.name,
+              description: paymentInfo.description,
+              images: paymentInfo?.image ? [paymentInfo.image] : [], // safe image
+            },
+          },
+          quantity: 1,
+        },
+      ],
+
+      mode: 'payment',
+      customer_email: paymentInfo.email,
+
+      success_url: `${process.env.CLIENT_DOMAIN}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.CLIENT_DOMAIN}/dashboard/contest/${paymentInfo.contestId}`,
+
+      metadata: {
+        contestId: paymentInfo.contestId.toString(),
+        customer: paymentInfo.email.toString(),
+      }
+    });
+
+    res.send({ url: session.url });
+
+  } catch (error) {
+    console.error("Stripe Checkout Error:", error);
+    res.status(500).send({ error: error.message });
+  }
+});
+
+ 
 
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
