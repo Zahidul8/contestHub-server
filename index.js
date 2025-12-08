@@ -34,6 +34,37 @@ async function run() {
     const paymentsCollection = db.collection('payments');
     const submissionsCollection = db.collection('submissions');
 
+    // user related apis 
+
+    app.post('/user', async (req, res) => {
+      const userData = req.body;
+      const query = {
+        email: userData.email
+      }
+      userData.created_at = new Date().toISOString();
+      userData.last_loggedIn = new Date().toISOString();
+      userData.role = 'user';
+
+      const alreadyExist = await usersCollection.findOne(query);
+      console.log('User already exists--------->', !!alreadyExist);
+
+      if (alreadyExist) {
+        console.log('updating user info......');
+        const result = await usersCollection.updateOne(query, {
+          $set: {
+            last_loggedIn: new Date().toISOString(),
+          }
+        })
+
+        return res.send(result);
+
+      }
+      console.log("Save a new user info");
+      const result = await usersCollection.insertOne(userData);
+      res.send(result);
+    })
+
+
     // creator related contest apis 
 
     app.get('/contests_all', async (req, res) => {
@@ -66,62 +97,62 @@ async function run() {
 
     // payment related apis 
 
-    
-app.post('/create-checkout-session', async (req, res) => {
-  try {
-    const paymentInfo = req.body;
 
-    // Validate data
-    if (!paymentInfo?.price || Number(paymentInfo.price) < 1) {
-      return res.status(400).send({ error: "Invalid price" });
-    }
-    if (!paymentInfo?.email) {
-      return res.status(400).send({ error: "Email is required" });
-    }
-    if (!paymentInfo?.contestId) {
-      return res.status(400).send({ error: "Contest ID is required" });
-    }
+    app.post('/create-checkout-session', async (req, res) => {
+      try {
+        const paymentInfo = req.body;
 
-    // Stripe Checkout Session
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
+        // Validate data
+        if (!paymentInfo?.price || Number(paymentInfo.price) < 1) {
+          return res.status(400).send({ error: "Invalid price" });
+        }
+        if (!paymentInfo?.email) {
+          return res.status(400).send({ error: "Email is required" });
+        }
+        if (!paymentInfo?.contestId) {
+          return res.status(400).send({ error: "Contest ID is required" });
+        }
 
-      line_items: [
-        {
-          price_data: {
-            currency: 'usd',
-            unit_amount: Number(paymentInfo.price) * 100, // convert to cents
-            product_data: {
-              name: paymentInfo.name,
-              description: paymentInfo.description,
-              images: paymentInfo?.image ? [paymentInfo.image] : [], // safe image
+        // Stripe Checkout Session
+        const session = await stripe.checkout.sessions.create({
+          payment_method_types: ['card'],
+
+          line_items: [
+            {
+              price_data: {
+                currency: 'usd',
+                unit_amount: Number(paymentInfo.price) * 100, // convert to cents
+                product_data: {
+                  name: paymentInfo.name,
+                  description: paymentInfo.description,
+                  images: paymentInfo?.image ? [paymentInfo.image] : [], // safe image
+                },
+              },
+              quantity: 1,
             },
-          },
-          quantity: 1,
-        },
-      ],
+          ],
 
-      mode: 'payment',
-      customer_email: paymentInfo.email,
+          mode: 'payment',
+          customer_email: paymentInfo.email,
 
-      success_url: `${process.env.CLIENT_DOMAIN}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.CLIENT_DOMAIN}/dashboard/contest/${paymentInfo.contestId}`,
+          success_url: `${process.env.CLIENT_DOMAIN}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+          cancel_url: `${process.env.CLIENT_DOMAIN}/dashboard/contest/${paymentInfo.contestId}`,
 
-      metadata: {
-        contestId: paymentInfo.contestId.toString(),
-        customer: paymentInfo.email.toString(),
+          metadata: {
+            contestId: paymentInfo.contestId.toString(),
+            customer: paymentInfo.email.toString(),
+          }
+        });
+
+        res.send({ url: session.url });
+
+      } catch (error) {
+        console.error("Stripe Checkout Error:", error);
+        res.status(500).send({ error: error.message });
       }
     });
 
-    res.send({ url: session.url });
 
-  } catch (error) {
-    console.error("Stripe Checkout Error:", error);
-    res.status(500).send({ error: error.message });
-  }
-});
-
- 
 
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
