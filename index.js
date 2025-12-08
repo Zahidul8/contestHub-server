@@ -122,6 +122,11 @@ async function run() {
 
     })
 
+        app.get("/contests-all", async (req, res) => {
+  const contests = await contestsCollection.find().toArray();
+  res.send(contests);
+});
+
     app.post('/contest', async (req, res) => {
       const contestData = req.body;
       contestData.status = 'pending';
@@ -129,18 +134,61 @@ async function run() {
       const result = await contestsCollection.insertOne(contestData);
       res.send(result);
     })
-    app.delete('/contests/:id', async(req, res) => {
+   
+    // UPDATE CONTEST API
+app.patch("/contest/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+    const {
+      name,
+      description,
+      price,
+      prizeMoney,
+      taskInstruction,
+      contestType,
+      deadline,
+    } = req.body;
+
+    // Build the update object
+    const updateDoc = {
+      $set: {
+        name,
+        description,
+        price: Number(price),
+        prizeMoney: Number(prizeMoney),
+        taskInstruction,
+        contestType,
+        deadline: new Date(deadline),
+        updated_at: new Date().toISOString(),
+      },
+    };
+
+    // Update the contest
+    const result = await contestsCollection.updateOne(
+      { _id: new ObjectId(id) },
+      updateDoc
+    );
+
+    res.send({
+      message: "Contest updated successfully",
+      modifiedCount: result
+    });
+  } catch (error) {
+    console.error("Update Contest Error:", error);
+    res.status(500).send({ error: error.message });
+  }
+});
+
+
+
+
+ app.delete('/contests/:id', async(req, res) => {
       const id = req.params.id;
       const query = {_id: new ObjectId(id)};
       const result = await contestsCollection.deleteOne(query);
       res.send(result)
 
     })
-
-    app.get("/contests-all", async (req, res) => {
-  const contests = await contestsCollection.find().toArray();
-  res.send(contests);
-});
 
 // Single API for Confirm / Reject / Delete
 app.patch("/contests/action/:id", async (req, res) => {
