@@ -127,6 +127,13 @@ async function run() {
       res.send(contests);
     });
 
+    app.get('/contests-winner', async (req, res) => {
+      const email = req.query.email;
+      const query = {winnerEmail: email};
+      const result = await contestsCollection.find().toArray();
+      res.send(result);
+    })
+
     app.post('/contest', async (req, res) => {
       const contestData = req.body;
       contestData.status = 'pending';
