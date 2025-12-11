@@ -229,20 +229,6 @@ async function run() {
 
     })
 
-    // submission task related apis 
-    app.post('/submission', async(req,res) => {
-      const taskInfo = req.body;
-      const query = {user_email: taskInfo.user_email, contestId: taskInfo.contestId};
-      const existintTask = await submissionsCollection.findOne(query);
-
-      if (existintTask) {
-        return res.send({message: 'Task Already added'});
-      }
-      
-      taskInfo.created_at = new Date().toISOString();
-      const result = await submissionsCollection.insertOne(taskInfo);
-      res.send(result);
-    })
 
 
     app.post('/create-checkout-session', async (req, res) => {
@@ -364,6 +350,55 @@ if (paymentExist) {
     res.status(500).send({ error: error.message });
   }
 });
+
+
+    // submission task related apis 
+
+    app.get('/creator/submission', async (req, res) => {
+      const email = req.query.email;
+      const result = await submissionsCollection.find({creator_email: email}).sort({created_at: -1}).toArray();
+      res.send(result);
+
+    })
+    app.get('/submission/:id', async (req , res) => {
+      const id = req.params.id;
+      const query = {_id: new ObjectId(id)};
+      const result = await submissionsCollection.findOne(query);
+      res.send(result);
+    })
+
+    app.post('/submission', async(req,res) => {
+      const taskInfo = req.body;
+      const query = {user_email: taskInfo.user_email, contestId: taskInfo.contestId};
+      const existintTask = await submissionsCollection.findOne(query);
+
+      if (existintTask) {
+        return res.send({message: 'Task Already added'});
+      }
+      
+      taskInfo.created_at = new Date().toISOString();
+      const result = await submissionsCollection.insertOne(taskInfo);
+      res.send(result);
+    })
+
+    app.patch('/contest/declare-winner/:id', async(req, res) => {
+      const {winnerName, winnerEmail} = req.body;
+      const id = req.params.id;
+      const query = {_id: new ObjectId(id)};
+      const existingData = await contestsCollection.findOne(query);
+      if (!!existingData.winnerName) {
+        return res.send({message: 'You have already declared winner'})
+      }
+      const updatedDoc = {
+        $set: {
+          winnerName: winnerName,
+          winnerEmail: winnerEmail
+        }
+      }
+
+      const result = await contestsCollection.updateOne(query, updatedDoc);
+      res.send(result);
+    })
 
 
 
