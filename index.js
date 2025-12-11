@@ -221,61 +221,29 @@ async function run() {
 
     // payment related apis 
 
+    app.get('/payment-status', async(req,res) => {
+      const {email, contestId} = req.query;
+      const result = await paymentsCollection.findOne({contestId:contestId, user_email: email});
+      res.send(result);
+     
 
-    // app.post('/create-checkout-session', async (req, res) => {
-    //   try {
-    //     const paymentInfo = req.body;
+    })
 
-    //     // Validate data
-    //     if (!paymentInfo?.price || Number(paymentInfo.price) < 1) {
-    //       return res.status(400).send({ error: "Invalid price" });
-    //     }
-    //     if (!paymentInfo?.email) {
-    //       return res.status(400).send({ error: "Email is required" });
-    //     }
-    //     if (!paymentInfo?.contestId) {
-    //       return res.status(400).send({ error: "Contest ID is required" });
-    //     }
+    // submission task related apis 
+    app.post('/submission', async(req,res) => {
+      const taskInfo = req.body;
+      const query = {user_email: taskInfo.user_email, contestId: taskInfo.contestId};
+      const existintTask = await submissionsCollection.findOne(query);
 
-    //     // Stripe Checkout Session
-    //     const session = await stripe.checkout.sessions.create({
-    //       payment_method_types: ['card'],
+      if (existintTask) {
+        return res.send({message: 'Task Already added'});
+      }
+      
+      taskInfo.created_at = new Date().toISOString();
+      const result = await submissionsCollection.insertOne(taskInfo);
+      res.send(result);
+    })
 
-    //       line_items: [
-    //         {
-    //           price_data: {
-    //             currency: 'usd',
-    //             unit_amount: Number(paymentInfo.price) * 100, // convert to cents
-    //             product_data: {
-    //               name: paymentInfo.name,
-    //               description: paymentInfo.description,
-    //               images: paymentInfo?.image ? [paymentInfo.image] : [], // safe image
-    //             },
-    //           },
-    //           quantity: 1,
-    //         },
-    //       ],
-
-    //       mode: 'payment',
-    //       customer_email: paymentInfo.email,
-
-    //       success_url: `${process.env.CLIENT_DOMAIN}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`,
-    //       cancel_url: `${process.env.CLIENT_DOMAIN}/dashboard/payment-cancelled/${paymentInfo.contestId}`,
-
-    //       metadata: {
-    //         contestId: paymentInfo.contestId.toString(),
-    //         user_email: paymentInfo.email,
-    //         contestName: paymentInfo.name
-    //       }
-    //     });
-
-    //     res.send({ url: session.url });
-
-    //   } catch (error) {
-    //     console.error("Stripe Checkout Error:", error);
-    //     res.status(500).send({ error: error.message });
-    //   }
-    // });
 
     app.post('/create-checkout-session', async (req, res) => {
   try {
@@ -325,9 +293,6 @@ async function run() {
     res.status(500).send({ error: error.message });
   }
 });
-
-
-
 
     app.post('/payment-success', async (req, res) => {
   try {
@@ -399,7 +364,6 @@ if (paymentExist) {
     res.status(500).send({ error: error.message });
   }
 });
-
 
 
 
