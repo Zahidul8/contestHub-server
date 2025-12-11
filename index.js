@@ -229,7 +229,12 @@ async function run() {
 
     })
 
-
+    app.get('/payments/participator', async(req, res) => {
+      const email = req.query.email;
+      const query = {user_email: email};
+      const result = await paymentsCollection.find(query).toArray();
+      res.send(result);
+    })
 
     app.post('/create-checkout-session', async (req, res) => {
   try {
