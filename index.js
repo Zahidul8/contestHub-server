@@ -6,10 +6,40 @@ const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const port = process.env.PORT || 3000
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
+const admin = require("firebase-admin");
+
+const serviceAccount = require("./contesthub-project-666ef-firebase-adminsdk-key.json");
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount)
+});
+
 
 // middleware 
 app.use(cors());
 app.use(express.json());
+
+const verifyFBToken = async (req, res, next) => {
+  const token = req.headers.authorization;
+  if (!token) {
+    return res.status(401).send({message: 'unauthorized access'});
+    
+  }
+
+  try{
+
+    const idToken = token.split(' ')[1];
+    const decoded = await admin.auth().verifyIdToken(idToken);
+    console.log('decoded in the token', decoded.email);
+    req.decoded_email = decoded.email;
+    
+
+    next();
+  } catch(err) {
+    return res.status(401).send({message: 'unauthorized access'});
+  }
+  
+}
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.v0yodsg.mongodb.net/?appName=Cluster0`;
 
@@ -33,6 +63,35 @@ async function run() {
     const contestsCollection = db.collection('contests')
     const paymentsCollection = db.collection('payments');
     const submissionsCollection = db.collection('submissions');
+
+
+    // middleware of admin and creator  
+    const verifyAdmin = async(req,res, next) => {
+      const email = req.decoded_email;
+      const query = {email};
+      const user = await usersCollection.findOne(query);
+
+      if(!user || user.role !== 'admin') {
+         return res.status(403).send({ message: 'forbidden access' })
+      }
+
+      next();
+      
+    }
+    const verifyCreator = async(req,res, next) => {
+      const email = req.decoded_email;
+      const query = {email};
+      const user = await usersCollection.findOne(query);
+
+      if(!user || user.role !== 'creator') {
+         return res.status(403).send({ message: 'forbidden access' })
+      }
+
+      next();
+      
+    }
+
+
 
     // user related apis 
 
@@ -64,13 +123,13 @@ async function run() {
       res.send(result);
     })
 
-    app.get('/users', async (req, res) => {
+    app.get('/users', verifyFBToken, verifyAdmin, async (req, res) => {
       const result = await usersCollection.find().toArray();
       res.send(result);
     })
 
     // update user role 
-    app.patch('/users/role/:email', async (req, res) => {
+    app.patch('/users/role/:email', verifyFBToken, verifyAdmin, async (req, res) => {
 
       const email = req.params.email;
       const { role } = req.body;
@@ -125,14 +184,14 @@ declared_at: -1}).limit(3).toArray();
       res.send(result);
     })
 
-    app.get('/contest/:id', async (req, res) => {
+    app.get('/contest/:id',verifyFBToken, async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const result = await contestsCollection.findOne(query);
       res.send(result);
     })
 
-    app.get('/contests/creator', async (req, res) => {
+    app.get('/contests/creator',verifyFBToken, verifyCreator, async (req, res) => {
       const email = req.query.email;
       const query = { email: email };
       const result = await contestsCollection.find(query).toArray();
@@ -140,19 +199,19 @@ declared_at: -1}).limit(3).toArray();
 
     })
 
-    app.get("/contests-all", async (req, res) => {
+    app.get("/contests-all", verifyFBToken, verifyAdmin, async (req, res) => {
       const contests = await contestsCollection.find().toArray();
       res.send(contests);
     });
 
-    app.get('/contests-winner', async (req, res) => {
+    app.get('/contests-winner',verifyFBToken, async (req, res) => {
       const email = req.query.email;
       const query = {winnerEmail: email};
       const result = await contestsCollection.find(query).toArray();
       res.send(result);
     })
 
-    app.post('/contest', async (req, res) => {
+    app.post('/contest', verifyFBToken, verifyCreator, async (req, res) => {
       const contestData = req.body;
       contestData.status = 'pending';
       contestData.created_at = new Date().toISOString();
@@ -161,7 +220,7 @@ declared_at: -1}).limit(3).toArray();
     })
 
     // UPDATE CONTEST API
-    app.patch("/contest/:id", async (req, res) => {
+    app.patch("/contest/:id", verifyFBToken, verifyCreator, async (req, res) => {
       try {
         const id = req.params.id;
         const {
@@ -207,7 +266,7 @@ declared_at: -1}).limit(3).toArray();
 
 
 
-    app.delete('/contests/:id', async (req, res) => {
+    app.delete('/contests/:id', verifyFBToken, verifyCreator, async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const result = await contestsCollection.deleteOne(query);
@@ -216,7 +275,7 @@ declared_at: -1}).limit(3).toArray();
     })
 
     // Single API for Confirm / Reject / Delete
-    app.patch("/contests/action/:id", async (req, res) => {
+    app.patch("/contests/action/:id", verifyFBToken, verifyAdmin, async (req, res) => {
       try {
         const id = req.params.id;
         const { action } = req.body; // action = "confirm" | "reject" | "delete"
@@ -246,7 +305,7 @@ declared_at: -1}).limit(3).toArray();
 
     // payment related apis 
 
-    app.get('/payment-status', async(req,res) => {
+    app.get('/payment-status', verifyFBToken, async(req,res) => {
       const {email, contestId} = req.query;
       const result = await paymentsCollection.findOne({contestId:contestId, user_email: email});
       res.send(result);
@@ -254,14 +313,14 @@ declared_at: -1}).limit(3).toArray();
 
     })
 
-    app.get('/payments/participator', async(req, res) => {
+    app.get('/payments/participator', verifyFBToken, async(req, res) => {
       const email = req.query.email;
       const query = {user_email: email};
       const result = await paymentsCollection.find(query).toArray();
       res.send(result);
     })
 
-    app.post('/create-checkout-session', async (req, res) => {
+    app.post('/create-checkout-session', verifyFBToken, async (req, res) => {
   try {
     const { contestId, email, price, name, description, image } = req.body;
 
@@ -310,7 +369,7 @@ declared_at: -1}).limit(3).toArray();
   }
 });
 
-    app.post('/payment-success', async (req, res) => {
+    app.post('/payment-success', verifyFBToken, async (req, res) => {
   try {
     const { sessionId } = req.body;
 
@@ -384,20 +443,20 @@ if (paymentExist) {
 
     // submission task related apis 
 
-    app.get('/creator/submission', async (req, res) => {
+    app.get('/creator/submission', verifyFBToken, verifyCreator, async (req, res) => {
       const email = req.query.email;
       const result = await submissionsCollection.find({creator_email: email}).sort({created_at: -1}).toArray();
       res.send(result);
 
     })
-    app.get('/submission/:id', async (req , res) => {
+    app.get('/submission/:id', verifyFBToken, verifyCreator, async (req , res) => {
       const id = req.params.id;
       const query = {_id: new ObjectId(id)};
       const result = await submissionsCollection.findOne(query);
       res.send(result);
     })
 
-    app.post('/submission', async(req,res) => {
+    app.post('/submission', verifyFBToken, async(req,res) => {
       const taskInfo = req.body;
       const query = {user_email: taskInfo.user_email, contestId: taskInfo.contestId};
       const existintTask = await submissionsCollection.findOne(query);
@@ -411,7 +470,7 @@ if (paymentExist) {
       res.send(result);
     })
 
-    app.patch('/contest/declare-winner/:id', async(req, res) => {
+    app.patch('/contest/declare-winner/:id', verifyFBToken, verifyCreator, async(req, res) => {
       const {winnerName, winnerEmail, winnerImage} = req.body;
       const id = req.params.id;
       const query = {_id: new ObjectId(id)};
