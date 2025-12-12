@@ -107,6 +107,17 @@ async function run() {
       res.send(result);
     })
 
+    // get all winners 
+    app.get('/recent-winners', async(req, res) => {
+      const result = await contestsCollection.find({status: 'approved', winnerName: {$exists: true, $ne: null}}).sort({
+declared_at: -1}).limit(3).toArray();
+      res.send(result);
+    })
+    app.get('/total-winners', async(req, res) => {
+      const result = await contestsCollection.find({status: 'approved', winnerName: {$exists: true, $ne: null}}).toArray();
+      res.send(result);
+    })
+
     app.get('/contest-search', async(req, res) => {
       const searchText = req.query.search;
       const query = {contestType: {$regex: searchText, $options: 'i'}};
@@ -137,7 +148,7 @@ async function run() {
     app.get('/contests-winner', async (req, res) => {
       const email = req.query.email;
       const query = {winnerEmail: email};
-      const result = await contestsCollection.find().toArray();
+      const result = await contestsCollection.find(query).toArray();
       res.send(result);
     })
 
@@ -401,7 +412,7 @@ if (paymentExist) {
     })
 
     app.patch('/contest/declare-winner/:id', async(req, res) => {
-      const {winnerName, winnerEmail} = req.body;
+      const {winnerName, winnerEmail, winnerImage} = req.body;
       const id = req.params.id;
       const query = {_id: new ObjectId(id)};
       const existingData = await contestsCollection.findOne(query);
@@ -411,7 +422,9 @@ if (paymentExist) {
       const updatedDoc = {
         $set: {
           winnerName: winnerName,
-          winnerEmail: winnerEmail
+          winnerEmail: winnerEmail,
+          winnerImage: winnerImage,
+          declared_at: new Date().toISOString(),
         }
       }
 
