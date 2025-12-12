@@ -107,6 +107,13 @@ async function run() {
       res.send(result);
     })
 
+    app.get('/contest-search', async(req, res) => {
+      const searchText = req.query.search;
+      const query = {contestType: {$regex: searchText, $options: 'i'}};
+      const result = await contestsCollection.find(query).sort({created_at: -1}).toArray();
+      res.send(result);
+    })
+
     app.get('/contest/:id', async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
