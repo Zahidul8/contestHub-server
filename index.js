@@ -227,10 +227,38 @@ async function run() {
 
     })
 
-    app.get("/contests-all", verifyFBToken, verifyAdmin, async (req, res) => {
-      const contests = await contestsCollection.find().toArray();
-      res.send(contests);
+    // manage contests api 
+    // Backend: /contests-all with pagination
+app.get("/contests-all", verifyFBToken, verifyAdmin, async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1; // default page 1
+    const limit = parseInt(req.query.limit) || 10; // default 10 items
+    const skip = (page - 1) * limit;
+
+    const totalCount = await contestsCollection.countDocuments();
+    const contests = await contestsCollection
+      .find()
+      .sort({ created_at: -1 })
+      .skip(skip)
+      .limit(limit)
+      .toArray();
+
+    res.send({
+      contests,
+      totalCount,
+      totalPages: Math.ceil(totalCount / limit),
+      currentPage: page
     });
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({ error: error.message });
+  }
+});
+
+    // app.get("/contests-all", verifyFBToken, verifyAdmin, async (req, res) => {
+    //   const contests = await contestsCollection.find().sort({created_at: -1}).toArray();
+    //   res.send(contests);
+    // });
 
     app.get('/contests-winner', verifyFBToken, async (req, res) => {
       const email = req.query.email;
