@@ -8,7 +8,8 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 const admin = require("firebase-admin");
 
-const serviceAccount = require("./contesthub-project-666ef-firebase-adminsdk-key.json");
+const decoded = Buffer.from(process.env.FB_SERVICE_KEY, 'base64').toString('utf8')
+const serviceAccount = JSON.parse(decoded);
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
@@ -146,7 +147,7 @@ async function run() {
       res.send(result);
 
     })
-    app.get('/win-user', async (req, res) => {
+    app.get('/win-user',verifyFBToken, async (req, res) => {
       const email = req.query.email;
       const query = {email: email };
       const result = await usersCollection.findOne(query);
@@ -227,7 +228,6 @@ async function run() {
 
     })
 
-    // manage contests api 
     // Backend: /contests-all with pagination
 app.get("/contests-all", verifyFBToken, verifyAdmin, async (req, res) => {
   try {
@@ -254,11 +254,6 @@ app.get("/contests-all", verifyFBToken, verifyAdmin, async (req, res) => {
     res.status(500).send({ error: error.message });
   }
 });
-
-    // app.get("/contests-all", verifyFBToken, verifyAdmin, async (req, res) => {
-    //   const contests = await contestsCollection.find().sort({created_at: -1}).toArray();
-    //   res.send(contests);
-    // });
 
     app.get('/contests-winner', verifyFBToken, async (req, res) => {
       const email = req.query.email;
@@ -572,7 +567,7 @@ app.get("/contests-all", verifyFBToken, verifyAdmin, async (req, res) => {
 
 
 
-    await client.db("admin").command({ ping: 1 });
+    // await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
 

@@ -1,3 +1,4 @@
 node_modules
 .env
 contesthub-project-666ef-firebase-adminsdk-key.json
+.vercel
