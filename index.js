@@ -95,7 +95,7 @@ async function run() {
 
     // user related apis 
 
-    app.get('/user/:email', async (req, res) => {
+    app.get('/user/:email', verifyFBToken, async (req, res) => {
       const email = req.params.email;
       const result = await usersCollection.findOne({ email });
       res.send(result);
@@ -110,6 +110,9 @@ async function run() {
       userData.created_at = new Date().toISOString();
       userData.last_loggedIn = new Date().toISOString();
       userData.role = 'user';
+      userData.totalWins = 0;
+      userData.totalPrize = 0;
+      userData.participatedCount = 0;
 
       const alreadyExist = await usersCollection.findOne(query);
       console.log('User already exists--------->', !!alreadyExist);
@@ -131,8 +134,24 @@ async function run() {
     })
 
     app.get('/users', verifyFBToken, verifyAdmin, async (req, res) => {
-      const result = await usersCollection.find().toArray();
+      const adminEmail = req.decoded_email;
+      const result = await usersCollection.find({ email: { $ne: adminEmail } }).toArray();
       res.send(result);
+    })
+
+    app.get('/win-users', async (req, res) => {
+
+      const query = { totalWins: { $gt: 0 } };
+      const result = await usersCollection.find(query).sort({ totalWins: -1 }).limit(3).toArray();
+      res.send(result);
+
+    })
+    app.get('/win-user', async (req, res) => {
+      const email = req.query.email;
+      const query = {email: email };
+      const result = await usersCollection.findOne(query);
+      res.send(result);
+
     })
 
     // update user role 
@@ -389,6 +408,7 @@ async function run() {
         // Retrieve session from Stripe
         const session = await stripe.checkout.sessions.retrieve(sessionId);
 
+        // Check existing payment
         const paymentExist = await paymentsCollection.findOne({
           contestId: session.metadata.contestId,
           user_email: session.metadata.user_email,
@@ -396,17 +416,24 @@ async function run() {
         });
 
         if (paymentExist) {
-          return res.send({ message: "Payment already exists", transactionId: session.payment_intent });
+          return res.send({
+            message: "Payment already exists",
+            transactionId: session.payment_intent
+          });
         }
+
         // Fetch contest info
-        const contest = await contestsCollection.findOne({ _id: new ObjectId(session.metadata.contestId) });
+        const contest = await contestsCollection.findOne({
+          _id: new ObjectId(session.metadata.contestId)
+        });
+
         if (!contest) {
           return res.status(404).send({ error: "Contest not found" });
         }
 
         // Prepare payment data
         const paymentData = {
-          sessionId: session.id,                  // unique
+          sessionId: session.id,
           transactionId: session.payment_intent,
           amount: session.amount_total / 100,
           image: contest.image,
@@ -418,29 +445,34 @@ async function run() {
           contestId: session.metadata.contestId,
           contestName: session.metadata.contestName,
           paymentStatus: session.payment_status,
-          winnerName: contest.winnerName,
           paidAt: new Date(),
         };
 
-        // Insert payment only if sessionId does not exist
+        // Insert payment (only once)
         const result = await paymentsCollection.updateOne(
-          { sessionId: session.id },       // search by sessionId
-          { $setOnInsert: paymentData },   // insert only if not exists
+          { sessionId: session.id },
+          { $setOnInsert: paymentData },
           { upsert: true }
         );
 
-        // Only increment contest count if this is the first payment
+        // Increment counts only for first-time payment
         if (result.upsertedCount === 1) {
           await contestsCollection.updateOne(
             { _id: new ObjectId(session.metadata.contestId) },
             { $inc: { count: 1 } }
           );
+
+          await usersCollection.updateOne(
+            { email: session.metadata.user_email },
+            { $inc: { participatedCount: 1 } }
+          );
         }
 
+        // Send response AFTER all DB updates
         res.send({
           transactionId: session.payment_intent,
           contestId: contest._id,
-          message: result.upsertedCount === 1 ? "Payment recorded" : "Payment already exists"
+          message: "Payment recorded successfully"
         });
 
       } catch (error) {
@@ -448,6 +480,7 @@ async function run() {
         res.status(500).send({ error: error.message });
       }
     });
+
 
 
     // submission task related apis 
@@ -487,6 +520,15 @@ async function run() {
       if (!!existingData.winnerName) {
         return res.send({ message: 'You have already declared winner' })
       }
+      const updateCount = await usersCollection.updateOne(
+        { email: winnerEmail },
+        {
+          $inc: {
+            totalWins: 1,
+            totalPrize: Number(existingData.prizeMoney || 0),
+          }
+        }
+      )
       const updatedDoc = {
         $set: {
           winnerName: winnerName,
